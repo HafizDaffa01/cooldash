@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>SHIELD Console</title>
+
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+
+    <style>
+        body {
+            background: black;
+            color: #00ff9f;
+            font-family: "Courier New", monospace;
+            margin: 0;
+            padding: 20px;
+        }
+
+        h1 {
+            text-align: center;
+            text-shadow: 0 0 10px #00ff9f;
+        }
+
+        .console {
+            border: 2px solid #00ff9f;
+            padding: 15px;
+            margin: 10px;
+            box-shadow: 0 0 15px #00ff9f;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+        }
+
+        .value {
+            font-size: 22px;
+            margin-top: 10px;
+        }
+
+        button {
+            background: black;
+            border: 1px solid #00ff9f;
+            color: #00ff9f;
+            padding: 10px;
+            margin: 5px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        button:hover {
+            background: #00ff9f;
+            color: black;
+            box-shadow: 0 0 10px #00ff9f;
+        }
+
+        input {
+            background: black;
+            border: 1px solid #00ff9f;
+            color: #00ff9f;
+            padding: 10px;
+            width: 100%;
+            margin-top: 10px;
+        }
+
+        .log {
+            height: 150px;
+            overflow-y: auto;
+            font-size: 12px;
+            background: black;
+            border: 1px solid #00ff9f;
+            padding: 10px;
+        }
+
+        .danger {
+            color: red;
+        }
+
+        .warning {
+            color: orange;
+        }
+
+        .safe {
+            color: #00ff9f;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>🛡️ SHIELD TERMINAL</h1>
+
+    <div class="grid">
+
+        <div class="console">
+            <h3>SYSTEM STATUS</h3>
+            <div id="status" class="value safe">-</div>
+        </div>
+
+        <div class="console">
+            <h3>GAS LEVEL</h3>
+            <div id="gas" class="value">0 ppm</div>
+        </div>
+
+        <div class="console">
+            <h3>TEMPERATURE</h3>
+            <div id="temp" class="value">0 °C</div>
+        </div>
+
+        <div class="console">
+            <h3>DOOR CONTROL</h3>
+            <button onclick="sendCmd('OPEN')">OPEN</button>
+            <button onclick="sendCmd('CLOSE')">CLOSE</button>
+        </div>
+
+        <div class="console">
+            <h3>ADD UID</h3>
+            <input id="uidInput" placeholder="A1B2C3D4">
+            <button onclick="addUID()">SEND</button>
+        </div>
+
+        <div class="console">
+            <h3>LOG</h3>
+            <div class="log" id="log"></div>
+        </div>
+
+    </div>
+
+    <script>
+        const client = mqtt.connect("wss://broker.hivemq.com:8884/mqtt");
+
+        const log = (msg) => {
+            const logBox = document.getElementById("log");
+            logBox.innerHTML += "> " + msg + "<br>";
+            logBox.scrollTop = logBox.scrollHeight;
+        };
+
+        client.on("connect", () => {
+            log("MQTT CONNECTED");
+            client.subscribe("shield/data");
+        });
+
+        client.on("message", (topic, message) => {
+            try {
+                const data = JSON.parse(message.toString());
+
+                document.getElementById("gas").innerText = (data.ppm ?? 0) + " ppm";
+                document.getElementById("temp").innerText = (data.temp ?? 0) + " °C";
+
+                let statusEl = document.getElementById("status");
+                statusEl.innerText = data.status ?? "-";
+
+                statusEl.className = "value";
+
+                if (data.status === "DANGER") {
+                    statusEl.classList.add("danger");
+                } else if (data.status === "WARNING") {
+                    statusEl.classList.add("warning");
+                } else {
+                    statusEl.classList.add("safe");
+                }
+
+                log("DATA: " + message.toString());
+
+            } catch (e) {
+                log("ERROR PARSE JSON");
+            }
+        });
+
+        function sendCmd(cmd) {
+            client.publish("shield/control", mcd);
+            log("CMD: " + cmd);
+        }
+
+        function addUID() {
+            let uid = document.getElementById("uidInput").value.trim().toUpperCase();
+
+            if (!uid) {
+                log("UID EMPTY");
+                return;
+            }
+
+            client.publish("shield/control", "ADD:" + uid);
+            log("ADD UID: " + uid);
+        }
+    </script>
+
+</body>
+
+</html>
